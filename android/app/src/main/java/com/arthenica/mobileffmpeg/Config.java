@@ -79,6 +79,8 @@ public class Config {
 
     private static int lastCreatedPipeIndex;
 
+    private static FrameSyncCallback frameSyncCallbackFunction;
+
     private static final List<FFmpegExecution> executions;
 
     static {
@@ -190,6 +192,10 @@ public class Config {
         disableNativeRedirection();
     }
 
+    public static void disableFrameSyncCallback() {
+        disableNativeFrameSyncCallback();
+    }
+
     /**
      * Returns log level.
      *
@@ -227,6 +233,11 @@ public class Config {
      */
     public static void enableStatisticsCallback(final StatisticsCallback statisticsCallback) {
         statisticsCallbackFunction = statisticsCallback;
+    }
+
+    public static void enableFrameSyncCallback(final FrameSyncCallback frameSyncCallback) {
+        frameSyncCallbackFunction = frameSyncCallback;
+        enableNativeFrameSyncCallback();
     }
 
     /**
@@ -331,6 +342,16 @@ public class Config {
      */
     public static void resetStatistics() {
         lastReceivedStatistics = new Statistics();
+    }
+
+    private static void frameSync(final int frameIndex, final int ret, final int eof) {
+        if (frameSyncCallbackFunction != null) {
+            try {
+                frameSyncCallbackFunction.apply(frameIndex, ret, eof);
+            } catch (final Exception e) {
+                Log.e(Config.TAG, "Exception thrown inside FrameSyncCallback block", e);
+            }
+        }
     }
 
     /**
@@ -675,6 +696,10 @@ public class Config {
      * <p>Disables native redirection
      */
     private static native void disableNativeRedirection();
+
+    private static native void enableNativeFrameSyncCallback();
+
+    private static native void disableNativeFrameSyncCallback();
 
     /**
      * Sets native log level

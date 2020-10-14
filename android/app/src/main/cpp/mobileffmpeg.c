@@ -63,6 +63,7 @@ static AVBPrint lastCommandOutput;
 
 pthread_t callbackThread;
 int redirectionEnabled;
+int frameSyncCallbackEnabled;
 
 struct CallbackData *callbackDataHead;
 struct CallbackData *callbackDataTail;
@@ -78,6 +79,9 @@ static jmethodID logMethod;
 
 /** Global reference of statistics redirection method in Java */
 static jmethodID statisticsMethod;
+
+/** Global reference of frame sync callback method in Java */
+static jmethodID frameSyncMethod;
 
 /** Global reference of String class in Java */
 static jclass stringClass;
@@ -542,6 +546,15 @@ void mobileffmpeg_statistics_callback_function(int frameNumber, float fps, float
     statisticsCallbackDataAdd(frameNumber, fps, quality, size, time, bitrate, speed);
 }
 
+void mobileffmpeg_frame_sync_callback_function(int frameIndex, int ret, int eof) {
+    JNIEnv *env;
+    if ((*globalVm)->GetEnv(globalVm, (void**)(&env), JNI_VERSION_1_6) != JNI_OK) {
+        LOGE("OnLoad failed to GetEnv for class %s.\n", configClassName);
+        return;
+    }
+    (*env)->CallStaticVoidMethod(env, configClass, frameSyncMethod, frameIndex, ret, eof);
+}
+
 /**
  * Forwards callback messages to Java classes.
  */
@@ -648,8 +661,14 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     }
 
     statisticsMethod = (*env)->GetStaticMethodID(env, localConfigClass, "statistics", "(JIFFJIDD)V");
-    if (logMethod == NULL) {
+    if (statisticsMethod == NULL) {
         LOGE("OnLoad thread failed to GetStaticMethodID for %s.\n", "statistics");
+        return JNI_FALSE;
+    }
+
+    frameSyncMethod = (*env)->GetStaticMethodID(env, localConfigClass, "frameSync", "(III)V");
+    if (frameSyncMethod == NULL) {
+        LOGE("OnLoad thread failed to GetStaticMethodID for %s.\n", "frameSync");
         return JNI_FALSE;
     }
 
@@ -665,6 +684,7 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     stringClass = (jclass) ((*env)->NewGlobalRef(env, localStringClass));
 
     redirectionEnabled = 0;
+    frameSyncCallbackEnabled = 0;
 
     callbackDataHead = NULL;
     callbackDataTail = NULL;
@@ -751,6 +771,36 @@ JNIEXPORT void JNICALL Java_com_arthenica_mobileffmpeg_Config_disableNativeRedir
     set_report_callback(NULL);
 
     monitorNotify();
+}
+
+/**
+ * Enables Frame Sync Callback.
+ *
+ * @param env pointer to native method interface
+ * @param object reference to the class on which this method is invoked
+ */
+JNIEXPORT void JNICALL Java_com_arthenica_mobileffmpeg_Config_enableNativeFrameSyncCallback(JNIEnv *env, jclass object) {
+    if (frameSyncCallbackEnabled != 0) {
+        return;
+    }
+    frameSyncCallbackEnabled = 1;
+
+    set_frame_sync_callback(mobileffmpeg_frame_sync_callback_function);
+}
+
+/**
+ * Disables Frame Sync Callback.
+ *
+ * @param env pointer to native method interface
+ * @param object reference to the class on which this method is invoked
+ */
+JNIEXPORT void JNICALL Java_com_arthenica_mobileffmpeg_Config_disableNativeFrameSyncCallback(JNIEnv *env, jclass object) {
+    if (frameSyncCallbackEnabled != 1) {
+        return;
+    }
+    frameSyncCallbackEnabled = 0;
+
+    set_frame_sync_callback(NULL);
 }
 
 /**

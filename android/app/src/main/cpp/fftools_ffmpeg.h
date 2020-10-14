@@ -687,6 +687,7 @@ int hw_device_setup_for_encode(OutputStream *ost);
 int hwaccel_decode_init(AVCodecContext *avctx);
 
 void set_report_callback(void (*callback)(int, float, float, int64_t, int, double, double));
+void set_frame_sync_callback(void (*callback)(int, int, int));
 
 void cancel_operation(long id);
 
